@@ -1,0 +1,18 @@
+import express from "express"
+import cors from "cors"
+import auth from "./auth.js";
+import profile from "./profile.js";
+const app=express();
+const PORT=3001
+
+app.use(express.json())
+app.use(cors())
+
+
+app.use(auth);
+app.use(profile)
+
+
+app.listen(PORT, "0.0.0.0", () => {
+    console.log("Server is running on port 3001....!!")
+})
