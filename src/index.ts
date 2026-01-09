@@ -2,6 +2,7 @@ import express from "express"
 import cors from "cors"
 import auth from "./auth.js";
 import profile from "./profile.js";
+import setting from "./setting.js";
 const app=express();
 const PORT=3001
 
@@ -11,6 +12,7 @@ app.use(cors())
 
 app.use(auth);
 app.use(profile)
+app.use(setting)
 
 
 app.listen(PORT, "0.0.0.0", () => {

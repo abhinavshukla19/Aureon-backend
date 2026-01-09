@@ -10,6 +10,7 @@ type UserProfile = {
     phone_number: string;
     plan_name: string | null;
     member_since: Date;
+    isverified:string
 };
 
 // <------------------>
@@ -29,6 +30,7 @@ profile.get("/profile", authmiddelware, async (req: Request, res: Response) => {
                 u.username,
                 u.email,
                 u.phone_number,
+                u.isverified,
                 u.created_at AS member_since,
                 sp.plan_name
             FROM user_login AS u
@@ -53,7 +55,8 @@ profile.get("/profile", authmiddelware, async (req: Request, res: Response) => {
                 email: user.email,
                 phone_number: user.phone_number,
                 plan_name: user.plan_name || "Free Plan",
-                member_since: user.member_since
+                member_since: user.member_since,
+                emailverifed:user.isverified
             }
         });
 

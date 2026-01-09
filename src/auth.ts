@@ -3,6 +3,9 @@ import type { Request , Response } from "express";
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
 import { database } from "./db.js";
+import { generaterandomotp } from "./utils/Randomgenerator.js";
+import { sendMail } from "./utils/mail.js";
+import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const auth= express.Router();
 
@@ -19,46 +22,58 @@ type UserRow = {
 };
 
 
-
 //   <--------------------->
         // for signup
 //   <--------------------->
 
-auth.post("/signup",async (req: Request, res: Response)=>{
-    try {
-        const { username , phonenumber , email , password }=req.body;
-        if (!username || !email || !phonenumber || !password) {
-            console.error("Incomplete fields");
-            return res.status(400).json({ message: "Please fill all the fields" });
-    }
-    const saltround=10;
-    const hashpassword=await bcrypt.hash(password,saltround);
+auth.post("/signup", async (req: Request, res: Response) => {
+  try {
+    const { username, phone_number, email, password } = req.body;
 
-     const [existing] = await database.query<any>(
-      "SELECT * FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
-      [email, phonenumber]
+    const randomotp=generaterandomotp().toFixed(0);
+
+    if (!username || !email || !phone_number || !password) {
+      return res.status(400).json({ message: "Please fill all the fields" });
+    }
+
+    const hashpassword = await bcrypt.hash(password, 10);
+
+    const [existing] = await database.query(
+      "SELECT user_id FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
+      [email, phone_number]
     );
-    const typedExisting = existing as UserRow[];
 
-    if (typedExisting.length > 0) {
-    return res.status(409).json({ message: "User already exists" });
+    if ((existing as any[]).length > 0) {
+      return res.status(409).json({ message: "User already exists" });
     }
-
-    await database.query("insert into user_login (username , email , password , phone_number) values(?,?,?,?)",
-        [username , email , hashpassword , phonenumber] )
+  
     
+
+    await database.query(
+      "INSERT INTO user_login (username, email, password, phone_number , otp) VALUES (?, ?, ?, ?, ?)",
+      [username, email, hashpassword, phone_number , randomotp ]
+    );
+
+    await sendMail({
+    to: email,
+    subject: "Your OTP for Aureon",
+    html: otpEmailTemplate(randomotp, email)
+  }); 
+
     return res.status(201).json({
-    message: "User registered successfully"
+      success: true,
+      message: "User registered successfully"
     });
 
-        
-    } catch (err) {
+  } catch (err) {
     console.error("Signup error:", err);
     return res.status(500).json({
-    message: "Something went wrong. Please try again later."
-  });
-}
+      success: false,
+      message: "Something went wrong. Please try again later."
+    });
+  }
 });
+
 
 
 
@@ -67,94 +82,94 @@ auth.post("/signup",async (req: Request, res: Response)=>{
         // for signin
 //   <--------------------->
 auth.post("/signin", async (req: Request, res: Response) => {
-    try {
-        const { email, phonenumber, password } = req.body;
-        const secret_key = process.env.jwt_secret_key as string;
+  try {
+    const { email, phone_number, password } = req.body;
+    const secret_key = process.env.jwt_secret_key as string;
 
-        // Validation: Check if required fields are provided
-        if ((!email && !phonenumber) || !password) {
-            return res.status(400).json({ 
-                success: false,
-                message: "Email/Phone number and password are required" 
-            });
-        }
-
-        // Check if secret key exists
-        if (!secret_key) {
-            console.error("JWT secret key is not defined");
-            return res.status(500).json({ 
-                success: false,
-                message: "Server configuration error" 
-            });
-        }
-
-        // Query database based on email or phone number
-        let rows;
-        if (email) {
-            [rows] = await database.query(
-                "SELECT * FROM user_login WHERE email = ?",
-                [email]
-            );
-        } else if (phonenumber) {
-            [rows] = await database.query(
-                "SELECT * FROM user_login WHERE phone_number = ?",
-                [phonenumber]
-            );
-        }
-
-        const userData = rows as unknown as UserRow[];
-
-        // Check if user exists
-        if (!userData || userData.length === 0) {
-            return res.status(404).json({ 
-                success: false,
-                message: "User doesn't exist" 
-            });
-        }
-
-        const user = userData[0]!;
-        const user_id = user.user_id;
-        const hashpassword = user.password;
-
-        // Verify password
-        const isPasswordValid = await bcrypt.compare(password, hashpassword);
-        
-        if (!isPasswordValid) {
-            return res.status(401).json({ 
-                success: false,
-                message: "Email/Phone number or password is incorrect" 
-            });
-        }
-
-        // Generate JWT token
-        const token = jwt.sign(
-            { 
-                user_id, 
-                email: user.email 
-            },
-            secret_key
-        );
-
-        // Update last login timestamp
-        await database.query(
-            "UPDATE user_login SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?",
-            [user_id]
-        );
-
-        // Success response
-        return res.status(200).json({
-            success: true,
-            message: "Login successful",
-            token: token,
-        });
-
-    } catch (error) {
-        console.error("Signin error:", error);
-        return res.status(500).json({ 
-            success: false,
-            message: "Something went wrong. Please try again later" 
-        });
+    if ((!email && !phone_number) || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email/Phone number and password are required",
+      });
     }
+
+    if (!secret_key) {
+      return res.status(500).json({
+        success: false,
+        message: "Server configuration error",
+      });
+    }
+
+    const identifier = email || phone_number;
+
+    const [rows] = await database.query(
+      "SELECT * FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
+      [identifier, identifier]
+    );
+
+    const users = rows as UserRow[] | any;
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User doesn't exist",
+      });
+    }
+
+    const user = users[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: "Email/Phone number or password is incorrect",
+      });
+    }
+
+    const token = jwt.sign(
+      {
+        user_id: user.user_id,
+      },
+      secret_key,
+      { expiresIn: "7d" }
+    );
+
+    await database.query(
+      "UPDATE user_login SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?",
+      [user.user_id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      token,
+    });
+
+  } catch (error) {
+    console.error("Signin error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong. Please try again later",
+    });
+  }
 });
+
+
+// <---------------------->
+//       OTP VERIFY
+// <---------------------->
+
+// auth.post("/otpverify",async (req:Request,res:Response)=>{
+//     const otp=req.body;
+//     if(!otp){
+//       return res.status(400).json({ success:false ,message:"Please enter the OTP"})
+//     }
+//     try {
+      
+//     } catch (error) {
+      
+//     }
+// })
+
 
 export default auth;
