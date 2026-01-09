@@ -159,17 +159,64 @@ auth.post("/signin", async (req: Request, res: Response) => {
 //       OTP VERIFY
 // <---------------------->
 
-// auth.post("/otpverify",async (req:Request,res:Response)=>{
-//     const otp=req.body;
-//     if(!otp){
-//       return res.status(400).json({ success:false ,message:"Please enter the OTP"})
-//     }
-//     try {
-      
-//     } catch (error) {
-      
-//     }
-// })
+auth.post("/otpverify", async (req: Request, res: Response) => {
+  const { email, otp } = req.body;
+
+  if (!email || !otp) {
+    return res.status(400).json({
+      success: false,
+      message: "Email and OTP are required"
+    });
+  }
+
+  try {
+    const [rows]: any = await database.query(
+      "SELECT otp FROM user_login WHERE email = ?",
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const storedOtp = rows[0].otp;
+
+    if (!storedOtp) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP expired or already used"
+      });
+    }
+
+    if (otp !== storedOtp) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid OTP"
+      });
+    }
+
+    // ✅ OTP verified → activate user
+    await database.query(
+      "UPDATE user_login SET otp = NULL, is_verified = true WHERE email = ?",
+      [email]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully"
+    });
+
+  } catch (error) {
+    console.error("OTP verify error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+});
 
 
 export default auth;
