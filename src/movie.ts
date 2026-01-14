@@ -47,6 +47,7 @@ movie.get("/get_all_movie", authmiddeware ,async(req:Request , res:Response)=>{
 })
 
 
+
 // <-------------------------------->
 //         top 5 movie fetch
 // <-------------------------------->
@@ -80,10 +81,6 @@ movie.get("/topfivemovies", authmiddeware ,async(req:Request , res:Response)=>{
 // <------------------------------------->
 movie.get("/moviedetailbyid/:id",async(req:Request , res:Response)=>{
     try {
-        const user_id=await req.authentication?.user_id
-        if (!user_id) {
-            return res.status(401).json({ message: "User ID not found in token" });
-        }
         const movie_id  = req.params.id;
         if (!movie_id) {
             return res.status(400).json({ message: "Movie ID is required" });
@@ -95,8 +92,47 @@ movie.get("/moviedetailbyid/:id",async(req:Request , res:Response)=>{
         return res.status(400).json({success:false , message:"error in fetching data"})
     }
     
-
 })
+
+
+
+// <--------------------------------------------->
+//         continue-watching movie fetch
+// <--------------------------------------------->
+movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)=>{
+    try {
+        const user_id=req.authentication?.user_id;
+        if(!user_id){
+            return res.status(400).json({success :false , message:"Don't be oversmart! Sign in first"})
+        }
+        const[rows]=await database.query("SELECT cw.id, cw.progress_seconds, cw.updated_at, m.movie_id, m.title, m.banner_url, m.duration, m.type FROM continue_watching cw JOIN movies m ON cw.movie_id = m.movie_id WHERE cw.user_id = ? ORDER BY cw.updated_at DESC;",[user_id]);
+        const movierows = rows as rowdata[]
+
+        return res.status(200).json({success:true , 
+            data:movierows,
+            message:"Data Fetched sucessfully"})
+        
+    } catch (error) {
+        console.log(error)
+        return res.status(404).json({success:false , message:"Error in fetching movie data"})
+    }
+})
+
+
+
+
+// <--------------------------------------------->
+//         continue-watching movie adding
+// <--------------------------------------------->\
+
+
+
+
+
+//        continue watching adding logic to table
+
+
+
 
 
 
