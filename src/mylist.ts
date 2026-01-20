@@ -24,7 +24,7 @@ type rowdata={
 
 mylist.post("/add-to-mylist", authmiddeware , async(req:Request , res:Response)=>{
     const { movie_id }=req.body;
-    try {
+    try { 
         const user_id=req.authentication?.user_id;
         if(!user_id){
             return res.status(401).json({success:false , message:"User id not found"})
@@ -32,9 +32,11 @@ mylist.post("/add-to-mylist", authmiddeware , async(req:Request , res:Response)=
 
         const [existing]=await database.query("SELECT 1 FROM my_list WHERE user_id = ? AND movie_id = ? LIMIT 1;",[user_id,movie_id])
         const data = existing as rowdata[] | any;
+    
 
         if (data.length > 0) {
-            return res.json({ success: false, message: "Already added" });
+            await database.query("DELETE FROM my_list WHERE user_id=? AND movie_id=? ;",[user_id,movie_id])
+            return res.json({ success: false, message: "Removed from list" });
         }
 
         await database.query("INSERT INTO my_list (user_id, movie_id) VALUES (?, ?);",[user_id,movie_id])

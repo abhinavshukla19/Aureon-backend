@@ -74,13 +74,17 @@ movie.get("/topfivemovies", authmiddeware ,async(req:Request , res:Response)=>{
 })
 
 
-
+                                            //   MOST IMPORTANT    \\
 
 // <------------------------------------->
 //         movie detail movie fetch
 // <------------------------------------->
-movie.get("/moviedetailbyid/:id",async(req:Request , res:Response)=>{
+movie.get("/moviedetailbyid/:id", authmiddeware , async(req:Request , res:Response)=>{
     try {
+        const user_id=req.authentication?.user_id;
+        if(!user_id){
+            return res.status(400).json({ message: "User ID is required" });
+        }
         const movie_id  = req.params.id;
         if (!movie_id) {
             return res.status(400).json({ message: "Movie ID is required" });
@@ -105,7 +109,21 @@ movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)
         if(!user_id){
             return res.status(400).json({success :false , message:"Don't be oversmart! Sign in first"})
         }
-        const[rows]=await database.query("SELECT cw.id, cw.progress_seconds, cw.updated_at, m.movie_id, m.title, m.banner_url, m.duration, m.type FROM continue_watching cw JOIN movies m ON cw.movie_id = m.movie_id WHERE cw.user_id = ? ORDER BY cw.updated_at DESC;",[user_id]);
+        const[rows]=await database.query(
+            `select  
+            cw.*,
+            m.banner_url,
+            m.title,
+            m.duration,
+            greatest(m.duration-cw.progress,0) as remaining_time,
+            LEAST(ROUND((cw.progress / NULLIF(m.duration, 0)) * 100), 100) AS watched_percent
+            FROM continue_watching cw
+            join movies m
+            on cw.movie_id=m.movie_id
+            where cw.user_id=?
+            order by cw.updated_at desc;
+        `   ,[user_id]);
+        
         const movierows = rows as rowdata[]
 
         return res.status(200).json({success:true , 
@@ -124,12 +142,31 @@ movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)
 // <--------------------------------------------->
 //         continue-watching movie adding
 // <--------------------------------------------->\
+movie.post("/add_watching_timesatmp", authmiddeware , async(req:Request , res:Response)=>{
+    try {
+        const { movie_id , progress } = req.body;
+        const user_id = req.authentication?.user_id;
 
+        if (!movie_id || progress == null) {
+        return res.status(400).json({ success: false, message: "Invalid data" });
+        }
 
+        await database.query(
+        `INSERT INTO continue_watching (user_id, movie_id, progress, updated_at)
+        VALUES (?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE
+        progress = VALUES(progress),
+        updated_at = NOW();`,
+        [user_id, movie_id, progress]
+        );
 
-
-
-//        continue watching adding logic to table
+        return res.status(200).json({success:true})
+        
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false });
+    }
+})
 
 
 

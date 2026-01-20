@@ -5,6 +5,7 @@ import profile from "./profile.js";
 import setting from "./setting.js";
 import movie from "./movie.js";
 import mylist from "./mylist.js";
+import cast from "./cast.js";
 const app=express();
 const PORT=3001
 
@@ -17,7 +18,7 @@ app.use(profile)
 app.use(setting)
 app.use(movie)
 app.use(mylist)
-
+app.use(cast)
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log("Server is running on port 3001....!!")
