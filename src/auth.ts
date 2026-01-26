@@ -30,39 +30,58 @@ auth.post("/signup", async (req: Request, res: Response) => {
   try {
     const { username, phone_number, email, password } = req.body;
 
-    const randomotp=generaterandomotp().toFixed(0);
-
+    // Input validation
     if (!username || !email || !phone_number || !password) {
-      return res.status(400).json({ message: "Please fill all the fields" });
+      return res.status(400).json({ 
+        success: false,
+        message: "Please fill all the fields" 
+      });
     }
 
-    const hashpassword = await bcrypt.hash(password, 10);
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format"
+      });
+    }
 
+    const randomotp = generaterandomotp().toFixed(0);
+    const hashpassword = await bcrypt.hash(password, 10);
+    
+    // OTP expires in 5 minutes
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Check existing user
     const [existing] = await database.query(
       "SELECT user_id FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
       [email, phone_number]
     );
 
     if ((existing as any[]).length > 0) {
-      return res.status(409).json({ message: "User already exists" });
+      return res.status(409).json({ 
+        success: false,
+        message: "User already exists" 
+      });
     }
-  
-    
 
+    // Insert user with OTP and expiry
     await database.query(
-      "INSERT INTO user_login (username, email, password, phone_number , otp) VALUES (?, ?, ?, ?, ?)",
-      [username, email, hashpassword, phone_number , randomotp ]
+      "INSERT INTO user_login (username, email, password, phone_number, otp, otp_expiry, otp_attempts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [username, email, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
+    // Send OTP email
     await sendMail({
-    to: email,
-    subject: "Your OTP for Aureon",
-    html: otpEmailTemplate(randomotp, email)
-  }); 
+      to: email,
+      subject: "Your OTP for Aureon",
+      html: otpEmailTemplate(randomotp, email)
+    });
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully"
+      message: "User registered successfully. Please check your email for OTP."
     });
 
   } catch (err) {
@@ -150,70 +169,6 @@ auth.post("/signin", async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Something went wrong. Please try again later",
-    });
-  }
-});
-
-
-// <---------------------->
-//       OTP VERIFY
-// <---------------------->
-
-auth.post("/otpverify", async (req: Request, res: Response) => {
-  const { email, otp } = req.body;
-
-  if (!email || !otp) {
-    return res.status(400).json({
-      success: false,
-      message: "Email and OTP are required"
-    });
-  }
-
-  try {
-    const [rows]: any = await database.query(
-      "SELECT otp FROM user_login WHERE email = ?",
-      [email]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found"
-      });
-    }
-
-    const storedOtp = rows[0].otp;
-
-    if (!storedOtp) {
-      return res.status(400).json({
-        success: false,
-        message: "OTP expired or already used"
-      });
-    }
-
-    if (otp !== storedOtp) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid OTP"
-      });
-    }
-
-    // ✅ OTP verified → activate user
-    await database.query(
-      "UPDATE user_login SET otp = NULL, is_verified = true WHERE email = ?",
-      [email]
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "OTP verified successfully"
-    });
-
-  } catch (error) {
-    console.error("OTP verify error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error"
     });
   }
 });

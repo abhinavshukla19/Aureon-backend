@@ -2,7 +2,6 @@ import express  from "express";
 import { database } from "./db.js";
 import type{Request , Response } from "express";
 import authmiddeware from "./auth_middleware.js";
-import movie from "./movie.js";
 
 const mylist=express.Router();
 
@@ -51,9 +50,9 @@ mylist.post("/add-to-mylist", authmiddeware , async(req:Request , res:Response)=
 
 
 
-// <---------------------------->
+// <----------------------------->
 //      mylist movie fetch
-// <---------------------------->
+// <----------------------------->
 
 mylist.get("/get_my_list", authmiddeware ,async(req:Request , res:Response)=>{
     try{
@@ -62,7 +61,7 @@ mylist.get("/get_my_list", authmiddeware ,async(req:Request , res:Response)=>{
             return res.status(401).json({success :false , message:"Don't be oversmart! Sign in first"})
         }
         
-        const[rows]=await database.query("SELECT m.movie_id, m.title, m.banner_url, m.type FROM my_list ml JOIN movies m ON ml.movie_id = m.movie_id WHERE ml.user_id = ? ORDER BY ml.created_at DESC",[user_id]);
+        const[rows]=await database.query("SELECT m.movie_id, m.title, m.banner_url, m.description, m.type FROM my_list ml JOIN movies m ON ml.movie_id = m.movie_id WHERE ml.user_id = ? ORDER BY ml.created_at DESC",[user_id]);
         const mylistdata = rows as rowdata[]
 
         return res.status(200).json({success:true , 

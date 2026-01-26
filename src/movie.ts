@@ -79,6 +79,7 @@ movie.get("/topfivemovies", authmiddeware ,async(req:Request , res:Response)=>{
 // <------------------------------------->
 //         movie detail movie fetch
 // <------------------------------------->
+
 movie.get("/moviedetailbyid/:id", authmiddeware , async(req:Request , res:Response)=>{
     try {
         const user_id=req.authentication?.user_id;
@@ -103,6 +104,7 @@ movie.get("/moviedetailbyid/:id", authmiddeware , async(req:Request , res:Respon
 // <--------------------------------------------->
 //         continue-watching movie fetch
 // <--------------------------------------------->
+
 movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)=>{
     try {
         const user_id=req.authentication?.user_id;
@@ -142,6 +144,7 @@ movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)
 // <--------------------------------------------->
 //         continue-watching movie adding
 // <--------------------------------------------->\
+
 movie.post("/add_watching_timesatmp", authmiddeware , async(req:Request , res:Response)=>{
     try {
         const { movie_id , progress } = req.body;

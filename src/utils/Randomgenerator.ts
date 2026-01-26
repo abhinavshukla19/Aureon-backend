@@ -4,5 +4,5 @@ export function getRandomArbitrary(min:number, max:number) {
 
 
 export const generaterandomotp=()=>{
-    return getRandomArbitrary(1000, 9999)
+    return getRandomArbitrary(100000, 999999)
 }

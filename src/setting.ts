@@ -17,7 +17,8 @@ type UserProfile = {
 
 // <--------------------------->
 //      Setting Detail
-// <---------------------------->
+// <--------------------------->
+
 setting.get("/settings", authmiddeware, async (req: Request, res: Response) => {
     try {
         const user_id = req.authentication?.user_id;
