@@ -2,8 +2,13 @@ import express from "express"
 import type{Request , Response} from "express"
 import { database } from "./db.js";
 import  jwt  from "jsonwebtoken";
+import { generaterandomotp } from "./utils/Randomgenerator.js";
+import { sendMail } from "./utils/mail.js";
+import { otpEmailTemplate } from "./utils/otpTemplate.js";
 const otp=express.Router();
 
+
+// otp verify
 
 otp.post("/otpverify", async (req: Request, res: Response) => {
   const { email, otp } = req.body;
@@ -119,5 +124,73 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
   }
 });
 
+
+
+
+
+// Resend otp
+
+otp.post("/resend-otp", async (req: Request, res: Response) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Email is required"
+    });
+  }
+
+  try {
+    // Check if user exists and is not verified
+    const [rows]: any = await database.query(
+      "SELECT user_id, isverified FROM user_login WHERE email = ?",
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email address"
+      });
+    }
+
+    // Check if already verified
+    if (rows[0].isverified) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already verified. Please login."
+      });
+    }
+
+    // Generate new OTP and expiry
+    const randomotp = generaterandomotp().toFixed(0);
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    // Update OTP in database (SQL syntax fix)
+    await database.query(
+      "UPDATE user_login SET otp = ?, otp_expiry = ?, otp_attempts = 0 WHERE email = ?",
+      [randomotp, otpExpiry, email]
+    );
+
+    // Send OTP email
+    await sendMail({
+      to: email,
+      subject: "Your OTP for Aureon",
+      html: otpEmailTemplate(randomotp, email)
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "New OTP sent to your email successfully"
+    });
+
+  } catch (error) {
+    console.error("Resend OTP error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to resend OTP. Please try again."
+    });
+  }
+});
 
 export default otp;

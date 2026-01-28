@@ -22,9 +22,8 @@ type UserRow = {
 };
 
 
-//   <--------------------->
+
         // for signup
-//   <--------------------->
 
 auth.post("/signup", async (req: Request, res: Response) => {
   try {
@@ -97,9 +96,8 @@ auth.post("/signup", async (req: Request, res: Response) => {
 
 
 
-//   <--------------------->
-        // for signin
-//   <--------------------->
+   // for signin
+
 auth.post("/signin", async (req: Request, res: Response) => {
   try {
     const { email, phone_number, password } = req.body;
