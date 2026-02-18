@@ -1,6 +1,6 @@
 import express from "express"
 import type{Request , Response} from "express"
-import { database } from "./db.js";
+import database from "./db.js";
 import  jwt  from "jsonwebtoken";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
 import { sendMail } from "./utils/mail.js";
@@ -21,8 +21,8 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
   }
 
   try {
-    const [rows]: any = await database.query(
-      "SELECT user_id, otp, otp_expiry, otp_attempts, isverified FROM user_login WHERE email = ?",
+    const { rows }: any = await database.query(
+      "SELECT user_id, otp, otp_expiry, otp_attempts, isverified FROM user_login WHERE email = $1",
       [email]
     );
 
@@ -55,7 +55,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
     // Check OTP expiration
     if (new Date() > new Date(user.otp_expiry)) {
       await database.query(
-        "UPDATE user_login SET otp = NULL, otp_expiry = NULL WHERE email = ?",
+        "UPDATE user_login SET otp = NULL, otp_expiry = NULL WHERE email = $1",
         [email]
       );
       return res.status(400).json({
@@ -67,7 +67,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
     // Check attempt limit (max 5 attempts)
     if (user.otp_attempts >= 5) {
       await database.query(
-        "UPDATE user_login SET otp = NULL, otp_expiry = NULL WHERE email = ?",
+        "UPDATE user_login SET otp = NULL, otp_expiry = NULL WHERE email = $1",
         [email]
       );
       return res.status(429).json({
@@ -80,7 +80,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
     if (String(otp) !== String(user.otp)) {
       // Increment attempt counter
       await database.query(
-        "UPDATE user_login SET otp_attempts = otp_attempts + 1 WHERE email = ?",
+        "UPDATE user_login SET otp_attempts = otp_attempts + 1 WHERE email = $1",
         [email]
       );
       
@@ -93,7 +93,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
 
     // OTP is valid - update user and clear OTP data
     await database.query(
-      "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0, isverified = true WHERE email = ?",
+      "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0, isverified = true WHERE email = $1",
       [email]
     );
 
@@ -142,8 +142,8 @@ otp.post("/resend-otp", async (req: Request, res: Response) => {
 
   try {
     // Check if user exists and is not verified
-    const [rows]: any = await database.query(
-      "SELECT user_id, isverified FROM user_login WHERE email = ?",
+    const { rows }: any = await database.query(
+      "SELECT user_id, isverified FROM user_login WHERE email = $1",
       [email]
     );
 
@@ -168,7 +168,7 @@ otp.post("/resend-otp", async (req: Request, res: Response) => {
 
     // Update OTP in database (SQL syntax fix)
     await database.query(
-      "UPDATE user_login SET otp = ?, otp_expiry = ?, otp_attempts = 0 WHERE email = ?",
+      "UPDATE user_login SET otp = $1, otp_expiry = $2, otp_attempts = 0 WHERE email = $3",
       [randomotp, otpExpiry, email]
     );
 

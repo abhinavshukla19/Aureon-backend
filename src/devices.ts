@@ -1,5 +1,5 @@
 import express from "express"
-import { database } from "./db.js"
+import database from "./db.js"
 import type{Request , Response} from "express"
 import authmiddeware from "./auth_middleware.js";
 
@@ -29,8 +29,8 @@ devices.post("/add-devices", authmiddeware , async(req:Request , res:Response)=>
 devices.get("/get-devices", authmiddeware ,async(req:Request , res:Response)=>{
     try {
         const user_id=req.authentication?.user_id;
-        const [data]=await database.query("SELECT * FROM user_devices where user_id=? ; ", [user_id]) 
-        return res.status(200).json({success:true , data:data , message:"data fetched successfully"})
+        const { rows } = await database.query("SELECT * FROM user_devices WHERE user_id = $1 ; ", [user_id]) 
+        return res.status(200).json({success:true , data:rows , message:"data fetched successfully"})
         
     } catch (error) {
         res.status(400).json({success:false , message:"Failed to fetch data"})

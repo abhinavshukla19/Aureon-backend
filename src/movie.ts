@@ -1,5 +1,5 @@
 import express from "express"
-import { database } from "./db.js"
+import database from "./db.js"
 import type{ Request , Response } from "express"
 import authmiddeware from "./auth_middleware.js"
 const movie=express.Router()
@@ -31,7 +31,7 @@ movie.get("/get_all_movie", authmiddeware ,async(req:Request , res:Response)=>{
             return res.status(400).json({success :false , message:"Don't be oversmart! Sign in first"})
         }
         
-        const[rows]=await database.query("select * from movies");
+        const { rows } = await database.query("SELECT * FROM movies");
         const typedRows = rows as rowdata[]
         const moviedata=typedRows;
 
@@ -59,7 +59,7 @@ movie.get("/topfivemovies", authmiddeware ,async(req:Request , res:Response)=>{
             return res.status(400).json({success :false , message:"Don't be oversmart! Sign in first"})
         }
         
-        const[rows]=await database.query("SELECT m.movie_id, m.title, m.banner_url, tm.rank_position FROM top_movies tm JOIN movies m ON tm.movie_id = m.movie_id ORDER BY tm.rank_position ASC;");
+        const { rows } = await database.query("SELECT m.movie_id, m.title, m.banner_url, tm.rank_position FROM top_movies tm JOIN movies m ON tm.movie_id = m.movie_id ORDER BY tm.rank_position ASC;");
         const movierows = rows as rowdata[]
 
         return res.status(200).json({success:true , 
@@ -90,7 +90,7 @@ movie.get("/moviedetailbyid/:id", authmiddeware , async(req:Request , res:Respon
         if (!movie_id) {
             return res.status(400).json({ message: "Movie ID is required" });
         }
-        const [rows]=await database.query("select * from movies where movie_id=?",[movie_id])
+        const { rows } = await database.query("SELECT * FROM movies WHERE movie_id = $1",[movie_id])
         return res.status(200).json({success:true , data:rows})
     } catch (error) {
         console.log(error)
@@ -111,19 +111,19 @@ movie.get("/continue_watching", authmiddeware ,async(req:Request , res:Response)
         if(!user_id){
             return res.status(400).json({success :false , message:"Don't be oversmart! Sign in first"})
         }
-        const[rows]=await database.query(
-            `select  
+        const { rows } = await database.query(
+            `SELECT  
             cw.*,
             m.banner_url,
             m.title,
             m.duration,
-            greatest(m.duration-cw.progress,0) as remaining_time,
+            GREATEST(m.duration-cw.progress,0) AS remaining_time,
             LEAST(ROUND((cw.progress / NULLIF(m.duration, 0)) * 100), 100) AS watched_percent
             FROM continue_watching cw
-            join movies m
-            on cw.movie_id=m.movie_id
-            where cw.user_id=?
-            order by cw.updated_at desc;
+            JOIN movies m
+            ON cw.movie_id=m.movie_id
+            WHERE cw.user_id=$1
+            ORDER BY cw.updated_at DESC;
         `   ,[user_id]);
         
         const movierows = rows as rowdata[]
@@ -156,10 +156,10 @@ movie.post("/add_watching_timesatmp", authmiddeware , async(req:Request , res:Re
 
         await database.query(
         `INSERT INTO continue_watching (user_id, movie_id, progress, updated_at)
-        VALUES (?, ?, ?, NOW())
-        ON DUPLICATE KEY UPDATE
-        progress = VALUES(progress),
-        updated_at = NOW();`,
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (user_id, movie_id) DO UPDATE
+        SET progress = EXCLUDED.progress,
+            updated_at = NOW();`,
         [user_id, movie_id, progress]
         );
 

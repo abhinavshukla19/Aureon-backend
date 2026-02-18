@@ -2,7 +2,7 @@ import express from "express";
 import type { Request, Response } from "express";
 const profile = express.Router();
 import authmiddelware from "./auth_middleware.js";
-import { database } from "./db.js";
+import database from "./db.js";
 
 type UserProfile = {
     username: string;
@@ -25,7 +25,7 @@ profile.get("/profile", authmiddelware, async (req: Request, res: Response) => {
             return res.status(401).json({ message: "User ID not found in token" });
         }
 
-        const [rows] = await database.query(
+        const { rows } = await database.query(
             `SELECT 
                 u.username,
                 u.email,
@@ -36,7 +36,7 @@ profile.get("/profile", authmiddelware, async (req: Request, res: Response) => {
             FROM user_login AS u
             LEFT JOIN user_subscription AS us ON u.user_id = us.user_id AND us.status = 'active'
             LEFT JOIN subscription_plans AS sp ON us.plan_id = sp.plan_id
-            WHERE u.user_id = ?;`,
+            WHERE u.user_id = $1;`,
             [user_id]
         );
 

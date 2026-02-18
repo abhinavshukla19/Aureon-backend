@@ -1,6 +1,6 @@
 import express from "express"
 import type { Request , Response } from "express"
-import { database } from "./db.js"
+import database from "./db.js"  
 
 const cast=express.Router();
 
@@ -13,8 +13,8 @@ cast.get("/get-cast" , async(req:Request , res:Response)=>{
             return res.status(400).json({success:false , message:"Movie ID not found"})
         }
         
-        const [data]=await database.query("select * from movie_cast where movie_id=? ;",[movie_id]);
-        return res.status(200).json({success:true , data:data , message:"Cast data feched sucessfull"})
+        const { rows } = await database.query("SELECT a.name , a.profile_url , mc.character_name FROM movie_cast mc JOIN actors a ON mc.actor_id = a.actor_id WHERE mc.movie_id = $1;",[movie_id]);
+        return res.status(200).json({success:true , data:rows , message:"Cast data feched sucessfull"})
 
     } catch (error) {
         console.log(error)

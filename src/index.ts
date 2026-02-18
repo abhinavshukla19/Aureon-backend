@@ -8,6 +8,7 @@ import mylist from "./mylist.js";
 import cast from "./cast.js";
 import devices from "./devices.js";
 import otp from "./otp.js";
+import health from "./healthcheck.js";
 const app=express();
 const PORT=3001
 
@@ -23,6 +24,8 @@ app.use(movie)
 app.use(mylist)
 app.use(cast)
 app.use(devices)
+app.use(health)
+
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log("Server is running on port 3001....!!")

@@ -2,7 +2,7 @@ import express from "express"
 import type { Request , Response } from "express";
 import jwt from "jsonwebtoken"
 import bcrypt from "bcrypt"
-import { database } from "./db.js";
+import database from "./db.js";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
 import { sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";
@@ -29,65 +29,80 @@ auth.post("/signup", async (req: Request, res: Response) => {
   try {
     const { username, phone_number, email, password } = req.body;
 
-    // Input validation
     if (!username || !email || !phone_number || !password) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Please fill all the fields" 
+        message: "Please fill all the fields",
       });
     }
 
-    // Basic email format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid email format"
+        message: "Invalid email format",
       });
     }
 
-    const randomotp = generaterandomotp().toFixed(0);
+    const randomotp = generaterandomotp().toString();
     const hashpassword = await bcrypt.hash(password, 10);
-    
-    // OTP expires in 5 minutes
+
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
+
+    // DEBUG: Log all values
+    console.log({
+      username,
+      email,
+      phone_number,
+      randomotp,
+      randomotpLength: randomotp.length,
+      hashpassword,
+      hashpasswordLength: hashpassword.length,
+      otpExpiry
+    });
+
     // Check existing user
-    const [existing] = await database.query(
-      "SELECT user_id FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
+    const { rows: existing } = await database.query(
+      `SELECT user_id 
+       FROM user_login 
+       WHERE email = $1 OR phone_number = $2 
+       LIMIT 1`,
       [email, phone_number]
     );
 
-    if ((existing as any[]).length > 0) {
-      return res.status(409).json({ 
+    if (existing.length > 0) {
+      return res.status(409).json({
         success: false,
-        message: "User already exists" 
+        message: "User already exists",
       });
     }
 
-    // Insert user with OTP and expiry
-    await database.query(
-      "INSERT INTO user_login (username, email, password, phone_number, otp, otp_expiry, otp_attempts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    // Insert user
+    const { rows } = await database.query(
+      `INSERT INTO user_login 
+      (username, email, password, phone_number, otp, otp_expiry, otp_attempts) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING user_id`,
       [username, email, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
-    // Send OTP email
     await sendMail({
       to: email,
       subject: "Your OTP for Aureon",
-      html: otpEmailTemplate(randomotp, email)
+      html: otpEmailTemplate(randomotp, email),
     });
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully. Please check your email for OTP."
+      message: "User registered successfully. Please check your email for OTP.",
     });
 
   } catch (err) {
     console.error("Signup error:", err);
     return res.status(500).json({
       success: false,
-      message: "Something went wrong. Please try again later."
+      message: "Something went wrong. Please try again later.",
     });
   }
 });
@@ -119,8 +134,8 @@ auth.post("/signin", async (req: Request, res: Response) => {
 
     const identifier = email || phone_number;
 
-    const [rows] = await database.query(
-      "SELECT * FROM user_login WHERE email = ? OR phone_number = ? LIMIT 1",
+    const { rows } = await database.query(
+      "SELECT * FROM user_login WHERE email = $1 OR phone_number = $2 LIMIT 1",
       [identifier, identifier]
     );
 
@@ -152,7 +167,7 @@ auth.post("/signin", async (req: Request, res: Response) => {
     );
 
     await database.query(
-      "UPDATE user_login SET last_login = CURRENT_TIMESTAMP WHERE user_id = ?",
+      "UPDATE user_login SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1",
       [user.user_id]
     );
 

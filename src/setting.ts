@@ -1,7 +1,7 @@
 import express from "express"
 import type { Request , Response } from "express"
 import authmiddeware from "./auth_middleware.js";
-import { database } from "./db.js";
+import database from "./db.js";
 const setting=express.Router()
 
 
@@ -27,7 +27,7 @@ setting.get("/settings", authmiddeware, async (req: Request, res: Response) => {
             return res.status(401).json({ message: "Unauthorized" });
         }
 
-        const [rows] = await database.query(
+        const { rows } = await database.query(
             `SELECT
                 u.user_id,
                 u.email,
@@ -41,7 +41,7 @@ setting.get("/settings", authmiddeware, async (req: Request, res: Response) => {
                 AND us.status = 'active'
             LEFT JOIN subscription_plans AS sp
                 ON us.plan_id = sp.plan_id
-            WHERE u.user_id = ?;
+            WHERE u.user_id = $1;
             `,
             [user_id]
         );
