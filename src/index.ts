@@ -9,6 +9,7 @@ import cast from "./cast.js";
 import devices from "./devices.js";
 import otp from "./otp.js";
 import health from "./healthcheck.js";
+import update from "./credential_update.js";
 
 const app=express();
 const PORT= process.env.PORT || 3001;
@@ -26,6 +27,7 @@ app.use(movie)
 app.use(mylist)
 app.use(cast)
 app.use(devices)
+app.use(update)
 
 
 

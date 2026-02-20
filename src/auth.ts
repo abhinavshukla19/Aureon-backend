@@ -22,8 +22,7 @@ type UserRow = {
 };
 
 
-
-        // for signup
+ //  FOR SIGNUP
 
 auth.post("/signup", async (req: Request, res: Response) => {
   try {
@@ -46,21 +45,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
 
     const randomotp = generaterandomotp().toString();
     const hashpassword = await bcrypt.hash(password, 10);
-
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
-
-
-    // DEBUG: Log all values
-    console.log({
-      username,
-      email,
-      phone_number,
-      randomotp,
-      randomotpLength: randomotp.length,
-      hashpassword,
-      hashpasswordLength: hashpassword.length,
-      otpExpiry
-    });
 
     // Check existing user
     const { rows: existing } = await database.query(
@@ -87,19 +72,32 @@ auth.post("/signup", async (req: Request, res: Response) => {
       [username, email, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
-    await sendMail({
+    // Send email in background, don't block response
+    sendMail({
       to: email,
       subject: "Your OTP for Aureon",
       html: otpEmailTemplate(randomotp, email),
+    }).catch((err) => {
+      console.error("Failed to send OTP email:", err);
     });
 
+    //  Don't send token during signup (only after OTP verification)
     return res.status(201).json({
       success: true,
       message: "User registered successfully. Please check your email for OTP.",
+      // No token here - user needs to verify OTP first
     });
 
-  } catch (err) {
+  } catch (err:any) {
     console.error("Signup error:", err);
+    
+    if (err.code === 'ECONNREFUSED' || err.code === '23505') { // PostgreSQL unique violation
+      return res.status(409).json({
+        success: false,
+        message: "User already exists",
+      });
+    }
+    
     return res.status(500).json({
       success: false,
       message: "Something went wrong. Please try again later.",

@@ -11,8 +11,9 @@ const otp=express.Router();
 // otp verify
 
 otp.post("/otpverify", async (req: Request, res: Response) => {
-  const { email, otp } = req.body;
+  const { email, otp, purpose } = req.body;
 
+  // Validation
   if (!email || !otp) {
     return res.status(400).json({
       success: false,
@@ -20,13 +21,25 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
     });
   }
 
+  // Validate purpose
+  const validPurposes = ['signup', 'password_change', 'email_change'];
+  const verificationPurpose = purpose || 'signup'; // Default to signup
+  
+  if (purpose && !validPurposes.includes(purpose)) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid verification purpose"
+    });
+  }
+
   try {
+    // Query database for user and OTP
     const { rows }: any = await database.query(
-      "SELECT user_id, otp, otp_expiry, otp_attempts, isverified FROM user_login WHERE email = $1",
+      "SELECT user_id, otp, otp_expiry, otp_attempts, isverified, email FROM user_login WHERE email = $1",
       [email]
     );
 
-    //  check if no user found
+    // Check if user exists
     if (rows.length === 0) {
       return res.status(400).json({
         success: false,
@@ -36,8 +49,8 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
 
     const user = rows[0];
 
-    // Check if already verified
-    if (user.isverified) {
+    // For signup: check if already verified
+    if (verificationPurpose === 'signup' && user.isverified) {
       return res.status(400).json({
         success: false,
         message: "Account already verified"
@@ -76,7 +89,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
       });
     }
 
-    // Verify OTP 
+    // Verify OTP
     if (String(otp) !== String(user.otp)) {
       // Increment attempt counter
       await database.query(
@@ -91,35 +104,111 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
       });
     }
 
-    // OTP is valid - update user and clear OTP data
-    await database.query(
-      "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0, isverified = true WHERE email = $1",
-      [email]
-    );
+    // OTP is valid - handle based on purpose
+    let token: string | undefined;
+    let responseData: any = {};
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { user_id: user.user_id, email: email },process.env.jwt_secret_key!,{ expiresIn: "7d" }
-    );
+    if (verificationPurpose === 'signup') {
+      // Signup: Update user, verify account, and generate token
+      await database.query(
+        "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0, isverified = true WHERE email = $1",
+        [email]
+      );
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", 
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: "/",
-    });
+      // Generate JWT token
+      token = jwt.sign(
+        { user_id: user.user_id, email: email },
+        process.env.jwt_secret_key!,
+        { expiresIn: "7d" }
+      );
 
-    return res.json({ 
-      success: true,
-      message: "Email verified successfully"
-    });
+      responseData = {
+        success: true,
+        message: "Email verified successfully",
+        token: token
+      };
 
-  } catch (error) {
+    } else if (verificationPurpose === 'password_change') {
+      // Password change: Just verify OTP, don't update isverified
+      // Clear OTP after verification
+      await database.query(
+        "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0 WHERE email = $1",
+        [email]
+      );
+
+      responseData = {
+        success: true,
+        message: "OTP verified. You can now change your password.",
+        data: {
+          verified: true,
+          email: email
+        }
+      };
+
+    } else if (verificationPurpose === 'email_change') {
+      // Email change: Verify OTP and update email
+      // Note: You might need to get the new email from a separate table or session
+      // For now, assuming the new email is stored somewhere (you'll need to implement this)
+      
+      // Clear OTP after verification
+      await database.query(
+        "UPDATE user_login SET otp = NULL, otp_expiry = NULL, otp_attempts = 0 WHERE email = $1",
+        [email]
+      );
+
+      // TODO: Update email in database if you have the new email stored
+      // Example:
+      // const newEmail = await getNewEmailFromTempTable(user.user_id);
+      // if (newEmail) {
+      //   await database.query(
+      //     "UPDATE user_login SET email = $1 WHERE user_id = $2",
+      //     [newEmail, user.user_id]
+      //   );
+      // }
+
+      responseData = {
+        success: true,
+        message: "OTP verified. Your email has been updated.",
+        data: {
+          verified: true,
+          email: email 
+        }
+      };
+    }
+
+    // Set cookie only for signup
+    if (token) {
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: "/",
+      });
+    }
+
+    return res.json(responseData);
+
+  } catch (error: any) {
     console.error("OTP verify error:", error);
-    return res.status(500).json({
+    
+    let errorMessage = "Internal server error";
+    let statusCode = 500;
+
+    // Handle specific database errors
+    if (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND') {
+      errorMessage = "Database connection failed. Please try again later.";
+      statusCode = 503;
+    } else if (error?.code === '23505') { // PostgreSQL unique violation
+      errorMessage = "A conflict occurred. Please try again.";
+      statusCode = 409;
+    } else if (error?.message) {
+      errorMessage = error.message;
+    }
+
+    return res.status(statusCode).json({
       success: false,
-      message: "Internal server error"
+      message: errorMessage
     });
   }
 });
@@ -131,7 +220,7 @@ otp.post("/otpverify", async (req: Request, res: Response) => {
 // Resend otp
 
 otp.post("/resend-otp", async (req: Request, res: Response) => {
-  const { email } = req.body;
+  const { email, purpose } = req.body;
 
   if (!email) {
     return res.status(400).json({
@@ -141,56 +230,61 @@ otp.post("/resend-otp", async (req: Request, res: Response) => {
   }
 
   try {
-    // Check if user exists and is not verified
-    const { rows }: any = await database.query(
-      "SELECT user_id, isverified FROM user_login WHERE email = $1",
+    // Check if user exists
+    const { rows } = await database.query(
+      "SELECT user_id, email FROM user_login WHERE email = $1",
       [email]
     );
 
     if (rows.length === 0) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
-        message: "Invalid email address"
+        message: "User not found"
       });
     }
 
-    // Check if already verified
-    if (rows[0].isverified) {
-      return res.status(400).json({
-        success: false,
-        message: "Email already verified. Please login."
-      });
-    }
+    // Generate new OTP
+    const randomotp = generaterandomotp().toString();
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Generate new OTP and expiry
-    const randomotp = generaterandomotp().toFixed(0);
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
-
-    // Update OTP in database (SQL syntax fix)
+    // Update OTP in database
     await database.query(
       "UPDATE user_login SET otp = $1, otp_expiry = $2, otp_attempts = 0 WHERE email = $3",
       [randomotp, otpExpiry, email]
     );
 
-    // Send OTP email
+    // Send email based on purpose
+    let emailSubject = "Your OTP for Aureon";
+    let emailTemplate = otpEmailTemplate(randomotp, email);
+
+    if (purpose === 'password_change') {
+      emailSubject = "OTP for Password Change - Aureon";
+      // You can create a custom template for password change
+    } else if (purpose === 'email_change') {
+      emailSubject = "OTP for Email Change - Aureon";
+      // You can create a custom template for email change
+    }
+
     await sendMail({
       to: email,
-      subject: "Your OTP for Aureon",
-      html: otpEmailTemplate(randomotp, email)
+      subject: emailSubject,
+      html: emailTemplate,
     });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
-      message: "New OTP sent to your email successfully"
+      message: "OTP sent successfully. Please check your email."
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Resend OTP error:", error);
+    
     return res.status(500).json({
       success: false,
-      message: "Failed to resend OTP. Please try again."
+      message: "Failed to send OTP. Please try again later."
     });
   }
 });
+
 
 export default otp;
