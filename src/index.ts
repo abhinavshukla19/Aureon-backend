@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config()
 import express from "express"
 import cors from "cors"
 import auth from "./auth.js";
@@ -10,6 +12,7 @@ import devices from "./devices.js";
 import otp from "./otp.js";
 import health from "./healthcheck.js";
 import update from "./credential_update.js";
+import { verifyMailConnection } from './utils/mail.js';
 
 const app=express();
 const PORT= process.env.PORT || 3001;
@@ -30,7 +33,12 @@ app.use(devices)
 app.use(update)
 
 
+const start = async () => {
+  await verifyMailConnection();
 
-app.listen(PORT , () => {
-    console.log(`Server is running on port ${PORT}....!!`)
-})
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+};
+
+start();
