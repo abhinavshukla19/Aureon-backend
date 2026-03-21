@@ -1,10 +1,10 @@
 import express from "express";
 import type { Request, Response } from "express";
-import database from "./db.ts";
-import { authmiddeware } from "./auth_middleware.ts";
-import { generaterandomotp } from "./utils/Randomgenerator.ts";
-import { sendMail } from "./utils/mail.ts";
-import { otpEmailTemplate } from "./utils/otpTemplate.ts";
+import database from "./db.js";
+import { authmiddeware } from "./auth_middleware.js";
+import { generaterandomotp } from "./utils/Randomgenerator.js";
+import { sendMail } from "./utils/mail.js";
+import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const update = express.Router();
 

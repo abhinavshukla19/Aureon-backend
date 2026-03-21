@@ -2,17 +2,17 @@ import dotenv from "dotenv";
 dotenv.config()
 import express from "express"
 import cors from "cors"
-import auth from "./auth.ts";
-import profile from "./profile.ts";
-import setting from "./setting.ts";
-import movie from "./movie.ts";
-import mylist from "./mylist.ts";
-import cast from "./cast.ts";
-import devices from "./devices.ts";
-import otp from "./otp.ts";
-import health from "./healthcheck.ts";
-import update from "./credential_update.ts";
-import { verifyMailConnection } from './utils/mail.ts';
+import auth from "./auth.js";
+import profile from "./profile.js";
+import setting from "./setting.js";
+import movie from "./movie.js";
+import mylist from "./mylist.js";
+import cast from "./cast.js";
+import devices from "./devices.js";
+import otp from "./otp.js";
+import health from "./healthcheck.js";
+import update from "./credential_update.js";
+import { verifyMailConnection } from "./utils/mail.js";
 
 const app=express();
 const PORT= process.env.PORT || 3001;

@@ -1,7 +1,7 @@
 import express from "express";
-import database from "./db.ts";
+import database from "./db.js";
 import type { Request, Response } from "express";
-import { authmiddeware } from "./auth_middleware.ts";
+import { authmiddeware } from "./auth_middleware.js";
 
 const cast = express.Router();
 

@@ -1,8 +1,8 @@
 import express from "express";
 import type { Request, Response } from "express";
 const profile = express.Router();
-import { authmiddeware } from "./auth_middleware.ts";
-import database from "./db.ts";
+import { authmiddeware } from "./auth_middleware.js";
+import database from "./db.js";
 
 
 
