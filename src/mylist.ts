@@ -5,15 +5,10 @@ import { authmiddeware } from "./auth_middleware.js";
 
 const mylist = express.Router();
 
-type MyListRow = {
+/** Full movie row from `movies` plus when it was saved to the list */
+type MyListRow = Record<string, unknown> & {
   movie_id: number;
-  title: string;
-  description: string;
-  release_year: number;
-  duration: number;
-  genre: string;
-  banner_url: string;
-  type: string;
+  added_at?: Date | string | null;
 };
 
 
@@ -32,7 +27,8 @@ mylist.post("/add-to-mylist", authmiddeware, async (req: Request, res: Response)
       });
     }
 
-    if (!movie_id) {
+    const mid = Number(movie_id);
+    if (!movie_id || Number.isNaN(mid)) {
       return res.status(400).json({
         success: false,
         message: "Movie ID is required",
@@ -41,27 +37,29 @@ mylist.post("/add-to-mylist", authmiddeware, async (req: Request, res: Response)
 
     const { rows: existing } = await database.query(
       "SELECT 1 FROM my_list WHERE user_id = $1 AND movie_id = $2 LIMIT 1",
-      [user_id, movie_id]
+      [user_id, mid]
     );
 
     if (existing.length > 0) {
       await database.query(
         "DELETE FROM my_list WHERE user_id = $1 AND movie_id = $2",
-        [user_id, movie_id]
+        [user_id, mid]
       );
       return res.status(200).json({
-        success: true,       
+        success: true,
+        inList: false,
         message: "Removed from list",
       });
     }
 
     await database.query(
       "INSERT INTO my_list (user_id, movie_id) VALUES ($1, $2)",
-      [user_id, movie_id]
+      [user_id, mid]
     );
 
     return res.status(200).json({
       success: true,
+      inList: true,
       message: "Added to list",
     });
 
@@ -90,10 +88,10 @@ mylist.get("/get_my_list", authmiddeware, async (req: Request, res: Response) =>
     }
 
     const { rows } = await database.query(
-      `SELECT m.movie_id, m.title, m.banner_url, m.description, m.type 
-       FROM my_list ml 
-       JOIN movies m ON ml.movie_id = m.movie_id 
-       WHERE ml.user_id = $1 
+      `SELECT m.*, ml.created_at AS added_at
+       FROM my_list ml
+       JOIN movies m ON ml.movie_id = m.movie_id
+       WHERE ml.user_id = $1
        ORDER BY ml.created_at DESC`,
       [user_id]
     );
@@ -115,6 +113,46 @@ mylist.get("/get_my_list", authmiddeware, async (req: Request, res: Response) =>
 
 
 // ─────────────────────────────────────────────
+// CHECK IF MOVIE IS IN LIST (for detail / UI)
+// ─────────────────────────────────────────────
+mylist.get("/contains/:movieId", authmiddeware, async (req: Request, res: Response) => {
+  try {
+    const user_id = req.authentication?.user_id;
+    if (!user_id) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required. Please sign in.",
+      });
+    }
+
+    const movieId = Number(req.params.movieId);
+    if (!req.params.movieId || Number.isNaN(movieId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid movie ID is required",
+      });
+    }
+
+    const { rows } = await database.query(
+      "SELECT 1 FROM my_list WHERE user_id = $1 AND movie_id = $2 LIMIT 1",
+      [user_id, movieId]
+    );
+
+    return res.status(200).json({
+      success: true,
+      inList: rows.length > 0,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Error checking list",
+    });
+  }
+});
+
+
+// ─────────────────────────────────────────────
 // REMOVE FROM LIST (explicit remove)
 // ─────────────────────────────────────────────
 mylist.post("/remove-from-mylist", authmiddeware, async (req: Request, res: Response) => {
@@ -129,7 +167,8 @@ mylist.post("/remove-from-mylist", authmiddeware, async (req: Request, res: Resp
       });
     }
 
-    if (!movie_id) {
+    const mid = Number(movie_id);
+    if (!movie_id || Number.isNaN(mid)) {
       return res.status(400).json({
         success: false,
         message: "Movie ID is required",
@@ -138,7 +177,7 @@ mylist.post("/remove-from-mylist", authmiddeware, async (req: Request, res: Resp
 
     const result = await database.query(
       "DELETE FROM my_list WHERE user_id = $1 AND movie_id = $2",
-      [user_id, movie_id]
+      [user_id, mid]
     );
 
     if (result.rowCount === 0) {

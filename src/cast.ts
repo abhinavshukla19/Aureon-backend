@@ -30,16 +30,12 @@ cast.get("/get-cast", authmiddeware, async (req: Request, res: Response) => {
       [movie_id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No cast found for this movie",
-      });
-    }
-
     return res.status(200).json({
       success: true,
-      message: "Cast fetched successfully",
+      message:
+        rows.length === 0
+          ? "No cast for this title"
+          : "Cast fetched successfully",
       data: rows as CastRow[],
     });
 
