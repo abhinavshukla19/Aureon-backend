@@ -1,8 +1,7 @@
 import express from "express";
 import type { Request, Response } from "express";
-import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import database from "./db.js";
+import database from "./db.ts";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
 import { sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";

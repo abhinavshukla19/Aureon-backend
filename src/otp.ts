@@ -1,11 +1,11 @@
 import express from "express";
 import type { Request, Response } from "express";
-import database from "./db.js";
+import database from "./db.ts";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { generaterandomotp } from "./utils/Randomgenerator.js";
-import { sendMail } from "./utils/mail.js";
-import { otpEmailTemplate } from "./utils/otpTemplate.js";
+import { generaterandomotp } from "./utils/Randomgenerator.ts";
+import { sendMail } from "./utils/mail.ts";
+import { otpEmailTemplate } from "./utils/otpTemplate.ts";
 
 const otp = express.Router();
 

@@ -1,7 +1,7 @@
 import express from "express";
-import database from "./db.js";
+import database from "./db.ts";
 import type { Request, Response } from "express";
-import { authmiddeware } from "./auth_middleware.js";
+import { authmiddeware } from "./auth_middleware.ts";
 
 const mylist = express.Router();
 
