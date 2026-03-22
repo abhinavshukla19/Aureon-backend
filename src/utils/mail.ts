@@ -1,5 +1,4 @@
-import nodemailer from "nodemailer";
-import type { Transporter } from "nodemailer";
+import { Resend } from "resend";
 
 interface MailOptions {
   to: string;
@@ -8,62 +7,89 @@ interface MailOptions {
   html?: string;
 }
 
-// Retry helper
-const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-const createTransporter = (): Transporter => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    throw new Error("EMAIL_USER and EMAIL_PASS must be set in environment variables");
+const getResend = (): Resend => {
+  const key = process.env.RESEND_API_KEY;
+  if (!key?.trim()) {
+    throw new Error("RESEND_API_KEY must be set in environment variables");
   }
-
-  return nodemailer.createTransport({
-    host: "smtp.gmail.com",  
-    port: 587,                
-    secure: false,        
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-    // Timeout settings
-    connectionTimeout: 10000,  // 10s to connect
-    greetingTimeout: 10000,    // 10s for SMTP greeting
-    socketTimeout: 15000,      // 15s for socket inactivity
-  });
+  return new Resend(key);
 };
 
-// Verify connection on startup
+/** "Name <email@domain.com>" — verify domain in Resend dashboard for production */
+const getFromAddress = (): string => {
+  const from = process.env.RESEND_FROM?.trim();
+  if (from) return from;
+  return "Aureon <ayushabhinav19@gmail.com>";
+};
+
+/**
+ * Lightweight check that the API key works (does not send an email).
+ */
 export const verifyMailConnection = async (): Promise<void> => {
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    console.warn("⚠️ RESEND_API_KEY not set — skipping Resend verification");
+    return;
+  }
+  if (process.env.SKIP_MAIL_VERIFY === "1" || process.env.SKIP_MAIL_VERIFY === "true") {
+    console.log("ℹ️ SKIP_MAIL_VERIFY set — skipping mail verification");
+    return;
+  }
   try {
-    const transporter = createTransporter();
-    await transporter.verify();
-    console.log("✅ Mail server connection verified");
-  } catch (error) {
-    console.error("❌ Mail server connection failed:", error);
+    const resend = getResend();
+    const { error } = await resend.domains.list();
+    if (error) {
+      console.error("❌ Resend API check failed:", error.message);
+      return;
+    }
+    console.log("✅ Resend API key OK");
+  } catch (err) {
+    console.error("❌ Resend verification error:", err);
   }
 };
 
 export const sendMail = async (
   { to, subject, text, html }: MailOptions,
-  retries = 2  // retry up to 2 times
+  retries = 2
 ): Promise<void> => {
-  const transporter = createTransporter();
+  if (!html && !text) {
+    throw new Error("sendMail requires html and/or text");
+  }
+
+  const from = getFromAddress();
+  const resend = getResend();
+
+  const replyTo = process.env.RESEND_REPLY_TO?.trim();
+
+  type SendEmailPayload = Parameters<Resend["emails"]["send"]>[0];
+  const payload = {
+    from,
+    to,
+    subject,
+    ...(html !== undefined ? { html } : {}),
+    ...(text !== undefined ? { text } : {}),
+    ...(replyTo ? { replyTo } : {}),
+  } as SendEmailPayload;
 
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
-      await transporter.sendMail({
-        from: `"Aureon" <${process.env.EMAIL_USER}>`,
-        to,
-        subject,
-        text,
-        html,
-      });
-      return; // success
-    } catch (error: any) {
+      const { error } = await resend.emails.send(payload);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+      return;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       const isLastAttempt = attempt === retries + 1;
 
       if (isLastAttempt) {
-        console.error(`❌ Failed to send email to ${to} after ${retries + 1} attempts:`, error.message);
-        throw error; // bubble up after all retries exhausted
+        console.error(
+          `❌ Failed to send email to ${to} after ${retries + 1} attempts:`,
+          message
+        );
+        throw err;
       }
 
       console.warn(`⚠️ Email attempt ${attempt} failed, retrying in 2s...`);

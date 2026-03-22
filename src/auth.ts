@@ -96,11 +96,20 @@ auth.post("/signup", async (req: Request, res: Response) => {
         [randomotp, otpExpiry, existing[0].user_id]
       );
 
-      sendMail({
-        to: normalizedEmail,
-        subject: "Your OTP for Aureon",
-        html: otpEmailTemplate(randomotp, normalizedEmail),
-      }).catch((err) => console.error("Failed to send OTP email:", err));
+      try {
+        await sendMail({
+          to: normalizedEmail,
+          subject: "Your OTP for Aureon",
+          html: otpEmailTemplate(randomotp, normalizedEmail),
+        });
+      } catch (err) {
+        console.error("Failed to send OTP email:", err);
+        return res.status(502).json({
+          success: false,
+          message: "Could not send verification email. Please try again later.",
+          unverified: true,
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -121,11 +130,19 @@ auth.post("/signup", async (req: Request, res: Response) => {
       [username, normalizedEmail, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
-    sendMail({
-      to: normalizedEmail,
-      subject: "Your OTP for Aureon",
-      html: otpEmailTemplate(randomotp, normalizedEmail),
-    }).catch((err) => console.error("Failed to send OTP email:", err));
+    try {
+      await sendMail({
+        to: normalizedEmail,
+        subject: "Your OTP for Aureon",
+        html: otpEmailTemplate(randomotp, normalizedEmail),
+      });
+    } catch (err) {
+      console.error("Failed to send OTP email:", err);
+      return res.status(502).json({
+        success: false,
+        message: "Account created but we could not send the verification email. Please use resend OTP or contact support.",
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -206,11 +223,19 @@ auth.post("/signin", async (req: Request, res: Response) => {
       [randomotp, otpExpiry, user.user_id]
     );
 
-    sendMail({
-      to: user.email,
-      subject: "Your Sign-in OTP - Aureon",
-      html: otpEmailTemplate(randomotp, user.email),
-    }).catch((err) => console.error("Failed to send signin OTP:", err));
+    try {
+      await sendMail({
+        to: user.email,
+        subject: "Your Sign-in OTP - Aureon",
+        html: otpEmailTemplate(randomotp, user.email),
+      });
+    } catch (err) {
+      console.error("Failed to send signin OTP:", err);
+      return res.status(502).json({
+        success: false,
+        message: "Could not send sign-in code to your email. Please try again later.",
+      });
+    }
 
     return res.status(200).json({
       success: true,

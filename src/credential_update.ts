@@ -56,11 +56,19 @@ update.post("/request-password-change", authmiddeware, async (req: Request, res:
       [randomotp, otpExpiry, user_id]
     );
 
-    await sendMail({
-      to: email,
-      subject: "OTP for Password Change - Aureon",
-      html: otpEmailTemplate(randomotp, email),
-    });
+    try {
+      await sendMail({
+        to: email,
+        subject: "OTP for Password Change - Aureon",
+        html: otpEmailTemplate(randomotp, email),
+      });
+    } catch (err) {
+      console.error("Password change OTP email failed:", err);
+      return res.status(502).json({
+        success: false,
+        message: "Could not send email. Please try again later.",
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -167,12 +175,19 @@ update.post("/request-email-change", authmiddeware, async (req: Request, res: Re
       [randomotp, otpExpiry, normalizedEmail, user_id]
     );
 
-    // Send OTP to the NEW email so they prove they own it
-    await sendMail({
-      to: normalizedEmail,
-      subject: "OTP for Email Change - Aureon",
-      html: otpEmailTemplate(randomotp, normalizedEmail),
-    });
+    try {
+      await sendMail({
+        to: normalizedEmail,
+        subject: "OTP for Email Change - Aureon",
+        html: otpEmailTemplate(randomotp, normalizedEmail),
+      });
+    } catch (err) {
+      console.error("Email change OTP send failed:", err);
+      return res.status(502).json({
+        success: false,
+        message: "Could not send email to your new address. Please try again later.",
+      });
+    }
 
     return res.status(200).json({
       success: true,

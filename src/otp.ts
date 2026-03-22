@@ -12,19 +12,25 @@ const otp = express.Router();
 
 // Send OTP (reused across routes)
 
-const sendOtp = async (email: string, subject: string) => {
+/** Updates OTP for the account row `accountEmail`; sends the code to `mailTo` (defaults to same email). */
+const sendOtp = async (
+  accountEmail: string,
+  subject: string,
+  mailTo?: string
+) => {
   const randomotp = generaterandomotp().toString();
   const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
+  const recipient = mailTo ?? accountEmail;
 
   await database.query(
     "UPDATE user_login SET otp = $1, otp_expiry = $2, otp_attempts = 0, last_otp_sent = NOW() WHERE email = $3",
-    [randomotp, otpExpiry, email]
+    [randomotp, otpExpiry, accountEmail]
   );
 
   await sendMail({
-    to: email,
+    to: recipient,
     subject,
-    html: otpEmailTemplate(randomotp, email),
+    html: otpEmailTemplate(randomotp, recipient),
   });
 };
 
@@ -317,18 +323,11 @@ otp.post("/resend-otp", async (req: Request, res: Response) => {
       email_change:     "OTP for Email Change - Aureon",
     };
 
-    // For email_change, send OTP to the pending new email
-    const sendTo = purpose === "email_change" ? user.pending_email : normalizedEmail;
-
-    await sendOtp(normalizedEmail, subjects[purpose] as string);  
-    
-    // if email_change, also send to new email
+    const subject = subjects[purpose] as string;
     if (purpose === "email_change") {
-      await sendMail({
-        to: sendTo,
-        subject: subjects[purpose] as string,
-        html: otpEmailTemplate("check your registered email for OTP", sendTo),
-      });
+      await sendOtp(normalizedEmail, subject, user.pending_email as string);
+    } else {
+      await sendOtp(normalizedEmail, subject);
     }
 
     return res.status(200).json({
