@@ -35,6 +35,8 @@ app.use("/api", health);
 const start = async () => {
   await verifyMailConnection();
 
+  console.log("PORT:", PORT);
+
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
   });
