@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import database from "./db.js";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
-import { sendMail } from "./utils/mail.js";
+import { MailDeliveryError, sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const auth = express.Router();
@@ -102,8 +102,16 @@ auth.post("/signup", async (req: Request, res: Response) => {
           subject: "Your OTP for Aureon",
           html: otpEmailTemplate(randomotp, normalizedEmail),
         });
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to send OTP email:", err);
+        if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+          return res.status(503).json({
+            success: false,
+            message:
+              "OTP provider is in testing mode and cannot send to this email yet. Ask support to verify sending domain configuration.",
+            unverified: true,
+          });
+        }
         return res.status(502).json({
           success: false,
           message: "Could not send verification email. Please try again later.",
@@ -123,10 +131,11 @@ auth.post("/signup", async (req: Request, res: Response) => {
     const hashpassword = await bcrypt.hash(password, 10);
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
-    await database.query(
+    const inserted = await database.query(
       `INSERT INTO user_login 
        (username, email, password, phone_number, otp, otp_expiry, otp_attempts, last_otp_sent) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       RETURNING user_id`,
       [username, normalizedEmail, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
@@ -136,11 +145,24 @@ auth.post("/signup", async (req: Request, res: Response) => {
         subject: "Your OTP for Aureon",
         html: otpEmailTemplate(randomotp, normalizedEmail),
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to send OTP email:", err);
+      if (inserted.rows[0]?.user_id) {
+        await database.query(
+          "DELETE FROM user_login WHERE user_id = $1 AND isverified = false",
+          [inserted.rows[0].user_id]
+        );
+      }
+      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Account could not be created because OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
+        });
+      }
       return res.status(502).json({
         success: false,
-        message: "Account created but we could not send the verification email. Please use resend OTP or contact support.",
+        message: "Could not send verification email, so account creation was cancelled. Please try again later.",
       });
     }
 
@@ -229,8 +251,15 @@ auth.post("/signin", async (req: Request, res: Response) => {
         subject: "Your Sign-in OTP - Aureon",
         html: otpEmailTemplate(randomotp, user.email),
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to send signin OTP:", err);
+      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "Sign-in OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
+        });
+      }
       return res.status(502).json({
         success: false,
         message: "Could not send sign-in code to your email. Please try again later.",

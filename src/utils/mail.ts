@@ -7,6 +7,19 @@ interface MailOptions {
   html?: string;
 }
 
+export class MailDeliveryError extends Error {
+  code: "TESTING_RECIPIENT_RESTRICTED" | "MAIL_SERVICE_UNAVAILABLE";
+
+  constructor(
+    code: "TESTING_RECIPIENT_RESTRICTED" | "MAIL_SERVICE_UNAVAILABLE",
+    message: string
+  ) {
+    super(message);
+    this.code = code;
+    this.name = "MailDeliveryError";
+  }
+}
+
 const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 const getResend = (): Resend => {
@@ -82,14 +95,27 @@ export const sendMail = async (
       return;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
+      const normalized = message.toLowerCase();
+      const isTestingRecipientRestricted =
+        normalized.includes("you can only send testing emails to your own email address");
       const isLastAttempt = attempt === retries + 1;
+
+      if (isTestingRecipientRestricted) {
+        throw new MailDeliveryError(
+          "TESTING_RECIPIENT_RESTRICTED",
+          "Email service is in testing mode and cannot send OTP to this address. Verify your domain and set RESEND_FROM to that verified domain."
+        );
+      }
 
       if (isLastAttempt) {
         console.error(
           `❌ Failed to send email to ${to} after ${retries + 1} attempts:`,
           message
         );
-        throw err;
+        throw new MailDeliveryError(
+          "MAIL_SERVICE_UNAVAILABLE",
+          "OTP email service is temporarily unavailable. Please try again later."
+        );
       }
 
       console.warn(`⚠️ Email attempt ${attempt} failed, retrying in 2s...`);

@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import database from "./db.js";
 import { authmiddeware } from "./auth_middleware.js";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
-import { sendMail } from "./utils/mail.js";
+import { MailDeliveryError, sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const update = express.Router();
@@ -62,8 +62,15 @@ update.post("/request-password-change", authmiddeware, async (req: Request, res:
         subject: "OTP for Password Change - Aureon",
         html: otpEmailTemplate(randomotp, email),
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Password change OTP email failed:", err);
+      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
+        });
+      }
       return res.status(502).json({
         success: false,
         message: "Could not send email. Please try again later.",
@@ -181,8 +188,15 @@ update.post("/request-email-change", authmiddeware, async (req: Request, res: Re
         subject: "OTP for Email Change - Aureon",
         html: otpEmailTemplate(randomotp, normalizedEmail),
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Email change OTP send failed:", err);
+      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+        return res.status(503).json({
+          success: false,
+          message:
+            "OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
+        });
+      }
       return res.status(502).json({
         success: false,
         message: "Could not send email to your new address. Please try again later.",
