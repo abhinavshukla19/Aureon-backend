@@ -34,7 +34,8 @@ const getResend = (): Resend => {
 const getFromAddress = (): string => {
   const from = process.env.RESEND_FROM?.trim();
   if (from) return from;
-  return "Aureon <ayushabhinav19@gmail.com>";
+  // Safe default for quick testing; production should use verified domain via RESEND_FROM.
+  return "Aureon <onboarding@resend.dev>";
 };
 
 /**
@@ -73,7 +74,9 @@ export const sendMail = async (
   const from = getFromAddress();
   const resend = getResend();
 
-  const replyTo = process.env.RESEND_REPLY_TO?.trim();
+  // Default reply-to to the same recipient address for OTP flows.
+  // Can still be overridden globally via RESEND_REPLY_TO.
+  const replyTo = process.env.RESEND_REPLY_TO?.trim() || to;
 
   type SendEmailPayload = Parameters<Resend["emails"]["send"]>[0];
   const payload = {
