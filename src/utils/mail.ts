@@ -100,7 +100,11 @@ export const sendMail = async (
       const message = err instanceof Error ? err.message : String(err);
       const normalized = message.toLowerCase();
       const isTestingRecipientRestricted =
-        normalized.includes("you can only send testing emails to your own email address");
+        normalized.includes("testing mode") ||
+        normalized.includes("testing emails") ||
+        normalized.includes("verify a domain") ||
+        normalized.includes("verify your domain") ||
+        normalized.includes("you can only send testing emails");
       const isLastAttempt = attempt === retries + 1;
 
       if (isTestingRecipientRestricted) {

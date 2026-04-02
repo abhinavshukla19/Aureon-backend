@@ -105,10 +105,10 @@ auth.post("/signup", async (req: Request, res: Response) => {
       } catch (err: any) {
         console.error("Failed to send OTP email:", err);
         if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-          return res.status(503).json({
+          return res.status(422).json({
             success: false,
             message:
-              "OTP provider is in testing mode and cannot send to this email yet. Ask support to verify sending domain configuration.",
+              "Email provider is in testing mode and cannot send OTP to this address yet. Verify domain in Resend and set RESEND_FROM to that domain.",
             unverified: true,
           });
         }
@@ -147,18 +147,19 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     } catch (err: any) {
       console.error("Failed to send OTP email:", err);
+      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
+        return res.status(202).json({
+          success: false,
+          unverified: true,
+          message:
+            "Account created, but OTP email is blocked in testing mode. Verify your Resend domain and then use resend OTP.",
+        });
+      }
       if (inserted.rows[0]?.user_id) {
         await database.query(
           "DELETE FROM user_login WHERE user_id = $1 AND isverified = false",
           [inserted.rows[0].user_id]
         );
-      }
-      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-        return res.status(503).json({
-          success: false,
-          message:
-            "Account could not be created because OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
-        });
       }
       return res.status(502).json({
         success: false,
@@ -254,10 +255,10 @@ auth.post("/signin", async (req: Request, res: Response) => {
     } catch (err: any) {
       console.error("Failed to send signin OTP:", err);
       if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-        return res.status(503).json({
+        return res.status(422).json({
           success: false,
           message:
-            "Sign-in OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
+            "Sign-in OTP is blocked in email testing mode. Verify domain in Resend and set RESEND_FROM to that domain.",
         });
       }
       return res.status(502).json({
@@ -269,6 +270,7 @@ auth.post("/signin", async (req: Request, res: Response) => {
     return res.status(200).json({
       success: true,
       message: "Password verified. Please check your email for the OTP to complete sign-in.",
+      email: user.email,
     });
 
   } catch (error) {
