@@ -28,21 +28,19 @@ export const authmiddeware = (req: Request, res: Response, next: NextFunction) =
     let token: string | undefined;
 
     const authHeader = req.headers.authorization;
-    const headerToken = req.headers["token"] as string | undefined;
 
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.split(" ")[1];
-    } else if (req.cookies?.token) {
-      token = req.cookies.token;
-    } else if (headerToken) {
-      token = headerToken;
-    }
-
-    if (!token) {
+    if (authHeader) {
+      token = authHeader.trim() || undefined;
+    } else {
       return res.status(401).json({
         success: false,
         message: "Authentication required. Please sign in."
       });
+    }
+    
+
+    if (!token) {
+      return res.status(401).json({ success: false, message: "Token missing." });
     }
 
    

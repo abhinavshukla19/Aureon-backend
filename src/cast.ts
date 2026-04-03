@@ -13,12 +13,12 @@ type CastRow = {
 
 cast.get("/get-cast", authmiddeware, async (req: Request, res: Response) => {
   try {
-    const movie_id = req.query.movie_id;
+    const movie_id = Number(req.query.movie_id);
 
-    if (!movie_id) {
+    if (!movie_id || isNaN(movie_id)) {
       return res.status(400).json({
         success: false,
-        message: "Movie ID is required",
+        message: "Valid Movie ID is required",
       });
     }
 

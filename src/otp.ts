@@ -4,7 +4,7 @@ import database from "./db.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
-import { MailDeliveryError, sendMail } from "./utils/mail.js";
+import { sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const otp = express.Router();
@@ -337,13 +337,6 @@ otp.post("/resend-otp", async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error("Resend OTP error:", error);
-    if (error instanceof MailDeliveryError && error.code === "TESTING_RECIPIENT_RESTRICTED") {
-      return res.status(503).json({
-        success: false,
-        message:
-          "OTP delivery is blocked in email testing mode. Ask support to verify sending domain configuration.",
-      });
-    }
     return res.status(500).json({
       success: false,
       message: "Failed to send OTP. Please try again later.",

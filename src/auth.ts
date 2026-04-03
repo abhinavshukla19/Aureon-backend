@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import database from "./db.js";
 import { generaterandomotp } from "./utils/Randomgenerator.js";
-import { MailDeliveryError, sendMail } from "./utils/mail.js";
+import { sendMail } from "./utils/mail.js";
 import { otpEmailTemplate } from "./utils/otpTemplate.js";
 
 const auth = express.Router();
@@ -28,6 +28,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
   try {
     const { username, phone_number, email, password } = req.body;
 
+    // ── Field presence check ──────────────────────────────────────────
     if (!username || !email || !phone_number || !password) {
       return res.status(400).json({
         success: false,
@@ -35,6 +36,15 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     }
 
+    // ── Username validation ───────────────────────────────────────────
+    if (username.trim().length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: "Username must be at least 2 characters",
+      });
+    }
+
+    // ── Email validation ──────────────────────────────────────────────
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -43,6 +53,16 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     }
 
+    // ── Phone validation ──────────────────────────────────────────────
+    const phoneRegex = /^\+?[1-9]\d{7,14}$/;
+    if (!phoneRegex.test(phone_number)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid phone number format",
+      });
+    }
+
+    // ── Password validation ───────────────────────────────────────────
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
@@ -58,8 +78,11 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     }
 
+    // ── Normalize ─────────────────────────────────────────────────────
     const normalizedEmail = email.toLowerCase().trim();
+    const normalizedUsername = username.trim();
 
+    // ── Existing user check ───────────────────────────────────────────
     const { rows: existing } = await database.query(
       `SELECT user_id, isverified, last_otp_sent FROM user_login 
        WHERE email = $1 OR phone_number = $2 LIMIT 1`,
@@ -67,6 +90,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
     );
 
     if (existing.length > 0) {
+
       // Already fully verified
       if (existing[0].isverified) {
         return res.status(409).json({
@@ -75,7 +99,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
         });
       }
 
-      // Unverified — check rate limit before resending OTP
+      // Unverified — rate limit check before resending OTP
       if (
         existing[0].last_otp_sent &&
         Date.now() - new Date(existing[0].last_otp_sent).getTime() < 60000
@@ -103,15 +127,8 @@ auth.post("/signup", async (req: Request, res: Response) => {
           html: otpEmailTemplate(randomotp, normalizedEmail),
         });
       } catch (err: any) {
-        console.error("Failed to send OTP email:", err);
-        if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-          return res.status(422).json({
-            success: false,
-            message:
-              "Email provider is in testing mode and cannot send OTP to this address yet. Verify domain in Resend and set RESEND_FROM to that domain.",
-            unverified: true,
-          });
-        }
+        console.error("Failed to send OTP email:", err);  // ← restored
+        
         return res.status(502).json({
           success: false,
           message: "Could not send verification email. Please try again later.",
@@ -126,7 +143,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     }
 
-    // Fresh signup
+    // ── Fresh signup ──────────────────────────────────────────────────
     const randomotp = generaterandomotp().toString();
     const hashpassword = await bcrypt.hash(password, 10);
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
@@ -136,7 +153,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
        (username, email, password, phone_number, otp, otp_expiry, otp_attempts, last_otp_sent) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        RETURNING user_id`,
-      [username, normalizedEmail, hashpassword, phone_number, randomotp, otpExpiry, 0]
+      [normalizedUsername, normalizedEmail, hashpassword, phone_number, randomotp, otpExpiry, 0]
     );
 
     try {
@@ -147,14 +164,7 @@ auth.post("/signup", async (req: Request, res: Response) => {
       });
     } catch (err: any) {
       console.error("Failed to send OTP email:", err);
-      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-        return res.status(202).json({
-          success: false,
-          unverified: true,
-          message:
-            "Account created, but OTP email is blocked in testing mode. Verify your Resend domain and then use resend OTP.",
-        });
-      }
+      
       if (inserted.rows[0]?.user_id) {
         await database.query(
           "DELETE FROM user_login WHERE user_id = $1 AND isverified = false",
@@ -208,14 +218,14 @@ auth.post("/signin", async (req: Request, res: Response) => {
     const normalizedEmail = email?.toLowerCase().trim() || null;
 
     const { rows } = await database.query(
-      "SELECT * FROM user_login WHERE email = $1 OR phone_number = $2 LIMIT 1",
+      "SELECT user_id, email, password, isverified, last_otp_sent FROM user_login WHERE email = $1 OR phone_number = $2 LIMIT 1",
       [normalizedEmail, phone_number || null]
     );
 
     if (rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "Invalid credentials",  // ← no user enumeration
       });
     }
 
@@ -233,11 +243,22 @@ auth.post("/signin", async (req: Request, res: Response) => {
     if (!isPasswordValid) {
       return res.status(401).json({
         success: false,
-        message: "Incorrect email/phone or password",
+        message: "Invalid credentials",  // ← consistent message
       });
     }
 
-    // Password valid — now send OTP for 2FA
+    // ── OTP rate limit ────────────────────────────────────────────────
+    if (
+      user.last_otp_sent &&
+      Date.now() - new Date(user.last_otp_sent).getTime() < 60000
+    ) {
+      return res.status(429).json({
+        success: false,
+        message: "OTP already sent. Please wait 60 seconds before trying again.",
+      });
+    }
+
+    // ── Send 2FA OTP ──────────────────────────────────────────────────
     const randomotp = generaterandomotp().toString();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -254,13 +275,6 @@ auth.post("/signin", async (req: Request, res: Response) => {
       });
     } catch (err: any) {
       console.error("Failed to send signin OTP:", err);
-      if (err instanceof MailDeliveryError && err.code === "TESTING_RECIPIENT_RESTRICTED") {
-        return res.status(422).json({
-          success: false,
-          message:
-            "Sign-in OTP is blocked in email testing mode. Verify domain in Resend and set RESEND_FROM to that domain.",
-        });
-      }
       return res.status(502).json({
         success: false,
         message: "Could not send sign-in code to your email. Please try again later.",
