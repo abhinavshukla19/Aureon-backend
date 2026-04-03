@@ -8,9 +8,7 @@ if (!process.env.SUPABASE_DB_URL) {
 
 const database = new Pool({
   connectionString: process.env.SUPABASE_DB_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: true }
-    : { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
