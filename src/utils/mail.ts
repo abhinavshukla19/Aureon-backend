@@ -1,19 +1,10 @@
 import dotenv from "dotenv";
 dotenv.config();
-import * as nodemailer from "nodemailer"
+import axios from "axios";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
-
-// Verify connection on startup
 export const verifyMailConnection = async () => {
   try {
-    await transporter.verify();
+    if (!process.env.BREVO_API_KEY) throw new Error("No Brevo API key found");
     console.log("✅ Mail server connected successfully");
   } catch (err) {
     console.error("❌ Mail server connection failed:", err);
@@ -29,10 +20,19 @@ export const sendMail = async ({
   subject: string;
   html: string;
 }) => {
-  await transporter.sendMail({
-    from: `"Aureon" <${process.env.GMAIL_USER}>`,
-    to,
-    subject,
-    html,
-  });
+  await axios.post(
+    "https://api.brevo.com/v3/smtp/email",
+    {
+      sender: { name: "Aureon", email: process.env.BREVO_SENDER_EMAIL },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    },
+    {
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "Content-Type": "application/json",
+      },
+    }
+  );
 };
