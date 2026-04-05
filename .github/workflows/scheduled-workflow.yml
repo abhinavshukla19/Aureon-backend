@@ -1,0 +1,20 @@
+name: Scheduled Task
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # Runs every 15 minutes
+  workflow_dispatch:          # Allows manual triggering from the Actions tab
+
+jobs:
+  run-task:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run your task
+        run: |
+          echo "Running scheduled task at $(date)"
+          # Add your commands here
+          curl --location 'https://aureon-backend-fl40.onrender.com/api/health'
